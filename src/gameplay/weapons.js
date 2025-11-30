@@ -1,13 +1,33 @@
-
-export const Weapons={
- pistol:{id:'pistol',fr:1,dm:1,n:1,sp:0},
- rifle:{id:'rifle',fr:1.8,dm:0.8,n:1,sp:0.05},
- shotgun:{id:'shotgun',fr:0.6,dm:0.9,n:6,sp:0.25},
- rocket:{id:'rocket',fr:0.5,dm:2,n:1,sp:0}
+export const WEAPONS = {
+  pistol: {
+    id: "pistol",
+    name: "Pistol",
+    fireRateMul: 1.0,
+    damageMul: 1.0,
+    bulletsPerShot: 1,
+    spread: 0.02
+  },
+  rifle: {
+    id: "rifle",
+    name: "Rifle",
+    fireRateMul: 1.8,
+    damageMul: 0.75,
+    bulletsPerShot: 1,
+    spread: 0.03
+  },
+  shotgun: {
+    id: "shotgun",
+    name: "Shotgun",
+    fireRateMul: 0.6,
+    damageMul: 0.9,
+    bulletsPerShot: 6,
+    spread: 0.25
+  }
 };
-export function weaponForLvl(l){
- if(l>=15)return 'rocket';
- if(l>=10)return 'shotgun';
- if(l>=5)return 'rifle';
- return 'pistol';
+
+export function getWeaponListForLevel(level) {
+  const list = ["pistol"];
+  if (level >= 2) list.push("rifle");
+  if (level >= 4) list.push("shotgun");
+  return list;
 }

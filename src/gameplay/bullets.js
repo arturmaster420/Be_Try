@@ -1,16 +1,45 @@
+import { CONFIG } from "../core/config.js";
+import { rollCrit, computeDamage } from "./crit.js";
 
-import {dist2} from '../core/math.js'
-export function shoot(world,p,eff,w){
- for(let i=0;i<w.n;i++){
-  let off=(i/(w.n-1)-0.5)*w.sp||0;
-  world.bullets.push({x:p.x,y:p.y,a:p.a+off,v:600,d:eff.dmg,cr:Math.random()<eff.cc});
- }
+export function spawnBulletPattern(world, eff, weapon) {
+  const p = world.player;
+  const baseAngle = p.facing;
+  const count = weapon.bulletsPerShot || 1;
+  const spread = weapon.spread || 0;
+
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0.5 : i / (count - 1);
+    const offset = (t - 0.5) * spread;
+    const ang = baseAngle + offset;
+    const dirX = Math.cos(ang);
+    const dirY = Math.sin(ang);
+    const isCrit = rollCrit(eff.critChance);
+    const dmg = computeDamage(eff.damage * weapon.damageMul, isCrit, eff.critMult);
+
+    world.bullets.push({
+      x: p.x + dirX * (p.radius + 6),
+      y: p.y + dirY * (p.radius + 6),
+      vx: dirX * CONFIG.BULLET_SPEED,
+      vy: dirY * CONFIG.BULLET_SPEED,
+      radius: CONFIG.BULLET_RADIUS,
+      isCrit,
+      damage: dmg,
+      maxDist: eff.range,
+      traveled: 0,
+    });
+  }
 }
-export function updBullets(world,dt){
- for(let i=world.bullets.length-1;i>=0;i--){
-  let b=world.bullets[i];
-  b.x+=Math.cos(b.a)*b.v*dt;b.y+=Math.sin(b.a)*b.v*dt;
-  world.enemies.forEach(e=>{if(dist2(b.x,b.y,e.x,e.y)<(e.r+3)**2)e.hp-=b.d;});
-  b.l=(b.l||0)+dt;if(b.l>1.2)world.bullets.splice(i,1);
- }
+
+export function updateBullets(world, dt) {
+  for (let i = world.bullets.length - 1; i >= 0; i--) {
+    const b = world.bullets[i];
+    const dx = b.vx * dt;
+    const dy = b.vy * dt;
+    b.x += dx;
+    b.y += dy;
+    b.traveled += Math.hypot(dx, dy);
+    if (b.traveled >= b.maxDist) {
+      world.bullets.splice(i, 1);
+    }
+  }
 }

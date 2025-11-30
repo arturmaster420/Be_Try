@@ -1,21 +1,90 @@
+import { CONFIG } from "../core/config.js";
 
-export function render(ctx,w,cam,cfg){
- ctx.clearRect(0,0,cfg.W,cfg.H);
- ctx.save();
- ctx.scale(cam.zoom,cam.zoom);
- ctx.translate(-cam.x,-cam.y);
+export function renderFrame(ctx, world) {
+  const W = CONFIG.CANVAS_WIDTH;
+  const H = CONFIG.CANVAS_HEIGHT;
 
- ctx.strokeStyle='rgba(255,255,255,0.03)';
- for(let x=-5000;x<5000;x+=180){ctx.beginPath();ctx.moveTo(x,-5000);ctx.lineTo(x,5000);ctx.stroke();}
- for(let y=-5000;y<5000;y+=180){ctx.beginPath();ctx.moveTo(-5000,y);ctx.lineTo(5000,y);ctx.stroke();}
+  ctx.fillStyle = "#050509";
+  ctx.fillRect(0, 0, W, H);
 
- w.enemies.forEach(e=>{ctx.fillStyle='#ff4444';ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,6.28);ctx.fill();});
- w.bullets.forEach(b=>{ctx.fillStyle=b.cr?'#fff060':'#fff';ctx.beginPath();ctx.arc(b.x,b.y,3,0,6.28);ctx.fill();});
- ctx.fillStyle='#44aaff';ctx.beginPath();ctx.arc(w.player.x,w.player.y,w.player.r,0,6.28);ctx.fill();
- ctx.restore();
+  ctx.save();
+  ctx.translate(-world.camera.x, -world.camera.y);
 
- ctx.fillStyle='#fff';ctx.font='14px monospace';
- ctx.fillText(`Score:${w.score}`,10,20);
- ctx.fillText(`HP:${Math.round(w.player.hp)}`,10,40);
- ctx.fillText(`Lvl:${w.player.lvl} XP:${w.player.xp}/${w.player.xpn}`,10,60);
+  // pickups
+  ctx.fillStyle = "#40ff88";
+  for (const pk of world.pickups) {
+    ctx.beginPath();
+    ctx.arc(pk.x, pk.y, pk.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // enemies
+  for (const e of world.enemies) {
+    ctx.beginPath();
+    ctx.fillStyle = e.color;
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // bullets
+  for (const b of world.bullets) {
+    ctx.beginPath();
+    ctx.fillStyle = b.isCrit ? "#ffe066" : "#ffffff";
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // player
+  const p = world.player;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.facing);
+  ctx.beginPath();
+  ctx.fillStyle = "#4fa9ff";
+  ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+
+  // HUD (simple text)
+  ctx.fillStyle = "#f0f0f0";
+  ctx.font = "13px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(`Score: ${world.score.toFixed(0)}`, 10, 18);
+  ctx.fillText(`Wave: ${world.wave}`, 10, 34);
+  ctx.fillText(`HP: ${Math.ceil(p.hp)}/${p.maxHp}`, 10, 50);
+  ctx.fillText(`Lvl: ${p.level}  XP: ${p.xp}/${p.xpToNext}`, 10, 66);
+  ctx.fillText(`Weapon: ${world.weaponName}`, 10, 82);
+
+  ctx.textAlign = "right";
+  ctx.fillText(
+    `BestScore: ${world.highScore.toFixed(0)}`,
+    W - 10,
+    18
+  );
+  ctx.fillText(
+    `BestWave: ${world.bestWave}`,
+    W - 10,
+    34
+  );
+  ctx.fillText(
+    `BestTime: ${world.bestTime.toFixed(1)}s`,
+    W - 10,
+    50
+  );
+
+  if (world.state !== "playing") {
+    ctx.textAlign = "center";
+    ctx.font = "24px system-ui";
+    const title =
+      world.state === "menu"
+        ? "BE_TRY — XP Core"
+        : world.state === "paused"
+        ? "PAUSED"
+        : "GAME OVER";
+    ctx.fillText(title, W / 2, H / 2 - 10);
+    ctx.font = "16px system-ui";
+    ctx.fillText("SPACE — start / resume,  R — restart,  P — pause", W / 2, H / 2 + 16);
+  }
 }

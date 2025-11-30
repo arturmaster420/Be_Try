@@ -1,5 +1,22 @@
+export function clamp(v, min, max) {
+  return v < min ? min : v > max ? max : v;
+}
 
-export const dist2=(a,b,x,y)=>{let dx=a-x,dy=b-y;return dx*dx+dy*dy;}
-export const rand=(a,b)=>Math.random()*(b-a)+a;
-export const norm=(x,y)=>{let l=Math.hypot(x,y)||1;return {x:x/l,y:y/l};}
-export const ang=(ax,ay,bx,by)=>Math.atan2(by-ay,bx-ax);
+export function randRange(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+export function dist2(ax, ay, bx, by) {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return dx * dx + dy * dy;
+}
+
+export function angleTo(ax, ay, bx, by) {
+  return Math.atan2(by - ay, bx - ax);
+}
+
+export function normalize(dx, dy) {
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: dx / len, y: dy / len };
+}
