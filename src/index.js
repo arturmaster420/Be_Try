@@ -1,62 +1,43 @@
-import "./style.css";
-import { CONFIG } from "./core/config.js";
-import { initInput, isKeyDown } from "./core/input.js";
-import { createWorld, resetGame, updateWorld } from "./core/world.js";
-import { renderFrame } from "./rendering/renderer.js";
-import { createWeaponSystem } from "./gameplay/weaponSystem.js";
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+import {CONFIG} from './core/config.js'
+import {initInput,input} from './core/input.js'
+import {createCam,updCam} from './core/camera.js'
+import {createP,updP} from './core/player.js'
+import {updBuffs,eff} from './gameplay/buffs.js'
+import {Weapons,weaponForLvl} from './gameplay/weapons.js'
+import {shoot,updBullets} from './gameplay/bullets.js'
+import {spawn,upd} from './gameplay/enemies.js'
 
-function resizeCanvas() {
-  const ratio = CONFIG.CANVAS_WIDTH / CONFIG.CANVAS_HEIGHT;
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-  if (w / h > ratio) {
-    w = h * ratio;
-  } else {
-    h = w / ratio;
-  }
-  canvas.width = CONFIG.CANVAS_WIDTH;
-  canvas.height = CONFIG.CANVAS_HEIGHT;
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-}
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+c.width=CONFIG.W;c.height=CONFIG.H;
+initInput(c);
 
-initInput(canvas);
-const world = createWorld();
-const weaponSystem = createWeaponSystem();
+const w={player:createP(CONFIG),enemies:[],bullets:[],pickups:[],score:0};
+const cam=createCam();
 
-let lastTime = performance.now();
-function loop(now) {
-  const dt = Math.min((now - lastTime) / 1000, 0.12);
-  lastTime = now;
+let last=performance.now();
+function loop(n){
+ let dt=Math.min((n-last)/1000,0.1);last=n;
 
-  if (world.state === "menu") {
-    if (isKeyDown("Space")) {
-      resetGame(world);
-      world.state = "playing";
-    }
-  } else if (world.state === "playing") {
-    if (isKeyDown("KeyP")) {
-      world.state = "paused";
-    }
-  } else if (world.state === "paused") {
-    if (isKeyDown("KeyP")) {
-      world.state = "playing";
-    }
-  } else if (world.state === "gameover") {
-    if (isKeyDown("Space") || isKeyDown("KeyR")) {
-      resetGame(world);
-      world.state = "playing";
-    }
-  }
+ let p=w.player;
+ let efs=eff(CONFIG);
+ p.ms=efs.ms;
+ cam.mx=input.mouse.x/cam.zoom+cam.x;
+ cam.my=input.mouse.y/cam.zoom+cam.y;
 
-  updateWorld(world, dt, weaponSystem);
-  renderFrame(ctx, world);
+ updP(p,dt,CONFIG,cam);
+ if(input.mouse.down){
+  let wid=weaponForLvl(p.lvl);let W=Weapons[wid];
+  p.ls+=dt;if(p.ls>1/(efs.fr*W.fr)){shoot(w,p,efs,W);p.ls=0;}
+ }
+ updBuffs(dt);
+ updBullets(w,dt);
+ upd(w,dt,CONFIG);
 
-  requestAnimationFrame(loop);
+ if(Math.random()<0.02)spawn(w,CONFIG);
+ updCam(cam,p,CONFIG);
+
+ import('./rendering/renderer.js').then(m=>m.render(ctx,w,cam,CONFIG));
+ requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
