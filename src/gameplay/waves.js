@@ -1,52 +1,50 @@
 import { CONFIG } from "../core/config.js";
 import { spawnEnemy, spawnBoss } from "./enemies.js";
 
+function waveNeed(wave) {
+  return Math.round(
+    CONFIG.WAVE_BASE_ENEMIES * Math.pow(CONFIG.WAVE_ENEMY_GROWTH, wave - 1)
+  );
+}
+
 export function initWaves(world) {
   world.wave = 1;
-  world.waveTimer = 0;
-  world.timeSinceLastBoss = 0;
+  world.waveKills = 0;
+  world.waveNeededKills = waveNeed(1);
+  world.waveSpawned = 0;
+  world.enemySpawnAccumulator = 0;
+  world.bossSpawnedThisWave = false;
   world.timeSinceLastBooster = 0;
 }
 
 export function updateWaves(world, dt) {
-  world.waveTimer += dt;
-  world.timeSinceLastBoss += dt;
   world.timeSinceLastBooster += dt;
 
-  // approximate wave index by time
-  const targetWave = 1 + Math.floor(world.totalTime / CONFIG.WAVE_BASE_DURATION);
-  if (targetWave > world.wave) {
-    world.wave = targetWave;
-    world.messages.push({
-      text: `Wave ${world.wave}`,
-      time: 3,
-      color: "#ffffff",
-    });
-  }
+  const need = world.waveNeededKills;
+  const alive = world.enemies.length;
+  const maxAlive = Math.min(need, 40 + world.wave * 5);
 
-  // continuously spawn regular enemies based on wave
-  const desiredCount =
-    CONFIG.WAVE_BASE_ENEMIES * Math.pow(CONFIG.WAVE_ENEMY_GROWTH, world.wave - 1);
-  const maxEnemies = Math.round(desiredCount);
-  if (world.enemies.length < maxEnemies) {
-    // spawn gradually
-    world.enemySpawnAccumulator = (world.enemySpawnAccumulator || 0) + dt;
-    const spawnInterval = 1.0 / (1 + 0.15 * world.wave);
+  if (world.waveSpawned < need && alive < maxAlive) {
+    world.enemySpawnAccumulator += dt;
+    const interval = 1.0 / (1 + 0.15 * world.wave);
     while (
-      world.enemySpawnAccumulator > spawnInterval &&
-      world.enemies.length < maxEnemies
+      world.enemySpawnAccumulator > interval &&
+      world.waveSpawned < need &&
+      world.enemies.length < maxAlive
     ) {
       spawnEnemy(world, world.wave);
-      world.enemySpawnAccumulator -= spawnInterval;
+      world.waveSpawned += 1;
+      world.enemySpawnAccumulator -= interval;
     }
   }
 
-  // normal boss every few waves
   if (
-    world.timeSinceLastBoss > CONFIG.WAVE_BASE_DURATION * CONFIG.WAVE_BOSS_INTERVAL
+    world.wave > 0 &&
+    world.wave % CONFIG.WAVE_BOSS_INTERVAL === 0 &&
+    !world.bossSpawnedThisWave
   ) {
-    spawnBoss(world, false, world.wave);
-    world.timeSinceLastBoss = 0;
+    spawnBoss(world, "normal", world.wave);
+    world.bossSpawnedThisWave = true;
     world.messages.push({
       text: "Boss incoming!",
       time: 3,
@@ -54,16 +52,37 @@ export function updateWaves(world, dt) {
     });
   }
 
-  // booster bosses: no global cap, just random chance
   if (world.timeSinceLastBooster > CONFIG.BOOSTER_MIN_INTERVAL) {
     if (Math.random() < CONFIG.BOOSTER_RANDOM_CHANCE) {
-      spawnBoss(world, true, world.wave);
+      const kind = Math.random() < 0.5 ? "crit" : "utility";
+      spawnBoss(world, kind, world.wave);
       world.messages.push({
-        text: "Booster boss!",
+        text:
+          kind === "crit"
+            ? "Crit booster boss!"
+            : "Utility booster boss!",
         time: 3,
-        color: CONFIG.BOOSTER_BOSS_COLOR,
+        color:
+          kind === "crit"
+            ? CONFIG.BOOSTER_CRIT_COLOR
+            : CONFIG.BOOSTER_UTILITY_COLOR,
       });
     }
     world.timeSinceLastBooster = 0;
+  }
+
+  if (world.waveKills >= need && world.enemies.length === 0) {
+    world.wave += 1;
+    world.waveKills = 0;
+    world.waveNeededKills = waveNeed(world.wave);
+    world.waveSpawned = 0;
+    world.enemySpawnAccumulator = 0;
+    world.bossSpawnedThisWave = false;
+
+    world.messages.push({
+      text: `Wave ${world.wave}`,
+      time: 3,
+      color: "#ffffff",
+    });
   }
 }

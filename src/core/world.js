@@ -1,6 +1,6 @@
 import { CONFIG } from "./config.js";
-import { createPlayer, resetPlayer, updatePlayer } from "./player.js";
-import { updateCamera, createCamera } from "./camera.js";
+import { createPlayer, resetPlayer } from "./player.js";
+import { createCamera, updateCamera } from "./camera.js";
 import { updateBullets } from "../gameplay/bullets.js";
 import { updateEnemies } from "../gameplay/enemies.js";
 import { updatePickups } from "../gameplay/pickups.js";
@@ -17,21 +17,29 @@ export function createWorld() {
     bullets: [],
     enemies: [],
     pickups: [],
+    hitEffects: [],
     messages: [],
     radius: CONFIG.WORLD_RADIUS,
     score: 0,
     highScore: loadHighScore(),
+    bestWave: loadBestWave(),
+    bestTime: loadBestTime(),
     wave: 1,
     totalTime: 0,
     paused: false,
     gameOver: false,
-    waveTimer: 0,
-    timeSinceLastBoss: 0,
-    timeSinceLastBooster: 0,
+    started: false,
+
+    waveKills: 0,
+    waveNeededKills: 0,
+    waveSpawned: 0,
     enemySpawnAccumulator: 0,
+    bossSpawnedThisWave: false,
+    timeSinceLastBooster: 0,
   };
 
   resetWorld(world);
+  world.started = false;
   return world;
 }
 
@@ -39,16 +47,20 @@ export function resetWorld(world) {
   world.bullets.length = 0;
   world.enemies.length = 0;
   world.pickups.length = 0;
+  world.hitEffects.length = 0;
   world.messages.length = 0;
   world.score = 0;
   world.wave = 1;
   world.totalTime = 0;
   world.gameOver = false;
   world.paused = false;
-  world.waveTimer = 0;
-  world.timeSinceLastBoss = 0;
-  world.timeSinceLastBooster = 0;
+
+  world.waveKills = 0;
+  world.waveNeededKills = 0;
+  world.waveSpawned = 0;
   world.enemySpawnAccumulator = 0;
+  world.bossSpawnedThisWave = false;
+  world.timeSinceLastBooster = 0;
 
   resetBuffs();
   resetPlayer(world.player);
@@ -57,7 +69,7 @@ export function resetWorld(world) {
 }
 
 export function updateWorld(world, dt) {
-  if (world.paused || world.gameOver) return;
+  if (!world.started || world.paused || world.gameOver) return;
 
   world.totalTime += dt;
 
@@ -69,32 +81,49 @@ export function updateWorld(world, dt) {
   updatePickups(world, dt);
   updateWaves(world, dt);
 
-  // messages lifetime
   for (let i = world.messages.length - 1; i >= 0; i--) {
     const m = world.messages[i];
     m.time -= dt;
     if (m.time <= 0) world.messages.splice(i, 1);
   }
 
+  for (let i = world.hitEffects.length - 1; i >= 0; i--) {
+    const h = world.hitEffects[i];
+    h.time -= dt;
+    if (h.time <= 0) world.hitEffects.splice(i, 1);
+  }
+
   if (world.gameOver) {
-    saveHighScore(world.score, world);
+    saveStats(world);
   }
 }
 
 export function togglePause(world) {
-  if (world.gameOver) return;
+  if (!world.started || world.gameOver) return;
   world.paused = !world.paused;
 }
 
-export function saveHighScore(score, world) {
-  const currentBest = world ? world.highScore : loadHighScore();
-  const best = Math.max(currentBest, score);
+export function saveStats(world) {
+  const currentBestScore = loadHighScore();
+  const newBestScore = Math.max(currentBestScore, world.score);
   try {
-    localStorage.setItem("boxhead2_highscore", String(best));
-  } catch (e) {
-    // ignore
-  }
-  if (world) world.highScore = best;
+    localStorage.setItem("boxhead2_highscore", String(newBestScore));
+  } catch {}
+  world.highScore = newBestScore;
+
+  const currentBestWave = loadBestWave();
+  const newBestWave = Math.max(currentBestWave, world.wave);
+  try {
+    localStorage.setItem("boxhead2_bestWave", String(newBestWave));
+  } catch {}
+  world.bestWave = newBestWave;
+
+  const currentBestTime = loadBestTime();
+  const newBestTime = Math.max(currentBestTime, world.totalTime);
+  try {
+    localStorage.setItem("boxhead2_bestTime", String(newBestTime));
+  } catch {}
+  world.bestTime = newBestTime;
 }
 
 export function loadHighScore() {
@@ -103,7 +132,27 @@ export function loadHighScore() {
     if (!raw) return 0;
     const v = parseFloat(raw);
     return Number.isFinite(v) ? v : 0;
-  } catch (e) {
+  } catch {
+    return 0;
+  }
+}
+export function loadBestWave() {
+  try {
+    const raw = localStorage.getItem("boxhead2_bestWave");
+    if (!raw) return 0;
+    const v = parseFloat(raw);
+    return Number.isFinite(v) ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+export function loadBestTime() {
+  try {
+    const raw = localStorage.getItem("boxhead2_bestTime");
+    if (!raw) return 0;
+    const v = parseFloat(raw);
+    return Number.isFinite(v) ? v : 0;
+  } catch {
     return 0;
   }
 }

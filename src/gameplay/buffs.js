@@ -2,8 +2,8 @@ import { CONFIG } from "../core/config.js";
 import { clamp } from "../core/math.js";
 
 const permanent = {
-  critChance: 0,     // absolute, 0..0.70
-  critDamagePct: 0,  // +% to multiplier
+  critChance: 0,
+  critDamagePct: 0,
   fireRatePct: 0,
   rangePct: 0,
   speedPct: 0,
@@ -11,7 +11,6 @@ const permanent = {
 };
 
 let tempBuffs = [];
-// each temp buff: { time: remainingSeconds, critChanceAdd, critDamageAdd }
 
 export function resetBuffs() {
   permanent.critChance = 0;
@@ -28,25 +27,70 @@ export function updateBuffs(dt) {
   tempBuffs = tempBuffs.filter((b) => b.time > 0);
 }
 
-export function applyBoosterBuff() {
-  tempBuffs.push({
-    time: CONFIG.BOOSTER_DURATION,
-    critChanceAdd: CONFIG.BOOSTER_CRIT_CHANCE_ADD,
-    critDamageAdd: CONFIG.BOOSTER_CRIT_DAMAGE_ADD,
-  });
+export function applyBoosterBuff(kind = "crit") {
+  if (kind === "crit") {
+    if (Math.random() < 0.5) {
+      tempBuffs.push({
+        time: CONFIG.BOOSTER_CRIT_DURATION,
+        critChanceAdd: CONFIG.BOOSTER_CRIT_CHANCE_ADD,
+        critDamageAdd: 0,
+        fireRatePct: 0,
+        rangePct: 0,
+        speedPct: 0,
+      });
+      return "+10% crit chance for 180s";
+    } else {
+      tempBuffs.push({
+        time: CONFIG.BOOSTER_CRIT_DURATION,
+        critChanceAdd: 0,
+        critDamageAdd: CONFIG.BOOSTER_CRIT_DAMAGE_ADD,
+        fireRatePct: 0,
+        rangePct: 0,
+        speedPct: 0,
+      });
+      return "+20% crit damage for 180s";
+    }
+  } else if (kind === "utility") {
+    const roll = Math.random();
+    if (roll < 1 / 3) {
+      tempBuffs.push({
+        time: CONFIG.BOOSTER_UTILITY_DURATION,
+        critChanceAdd: 0,
+        critDamageAdd: 0,
+        fireRatePct: CONFIG.BOOSTER_UTILITY_FIRE_ADD,
+        rangePct: 0,
+        speedPct: 0,
+      });
+      return "+20% fire rate for 60s";
+    } else if (roll < 2 / 3) {
+      tempBuffs.push({
+        time: CONFIG.BOOSTER_UTILITY_DURATION,
+        critChanceAdd: 0,
+        critDamageAdd: 0,
+        fireRatePct: 0,
+        rangePct: CONFIG.BOOSTER_UTILITY_RANGE_ADD,
+        speedPct: 0,
+      });
+      return "+20% range for 60s";
+    } else {
+      tempBuffs.push({
+        time: CONFIG.BOOSTER_UTILITY_DURATION,
+        critChanceAdd: 0,
+        critDamageAdd: 0,
+        fireRatePct: 0,
+        rangePct: 0,
+        speedPct: CONFIG.BOOSTER_UTILITY_SPEED_ADD,
+      });
+      return "+10% move speed for 60s";
+    }
+  }
+  return "Booster!";
 }
 
-const PERM_UPGRADES = [
-  "critChance",
-  "critDamage",
-  "fireRate",
-  "range",
-  "speed",
-  "damage",
-];
+const PERM = ["critChance", "critDamage", "fireRate", "range", "speed", "damage"];
 
 export function applyRandomPermanentUpgrade() {
-  const key = PERM_UPGRADES[Math.floor(Math.random() * PERM_UPGRADES.length)];
+  const key = PERM[Math.floor(Math.random() * PERM.length)];
   switch (key) {
     case "critChance":
       permanent.critChance = clamp(
@@ -78,7 +122,6 @@ export function getPermanent() {
 }
 
 export function getEffectiveStats() {
-  // base stats from CONFIG
   const baseMove = CONFIG.PLAYER_BASE_MOVE_SPEED;
   const baseFireRate = CONFIG.PLAYER_BASE_FIRE_RATE;
   const baseRange = CONFIG.PLAYER_BASE_BULLET_RANGE;
@@ -88,9 +131,16 @@ export function getEffectiveStats() {
 
   let tempCritChanceAdd = 0;
   let tempCritDamageAdd = 0;
+  let tempFireRatePct = 0;
+  let tempRangePct = 0;
+  let tempSpeedPct = 0;
+
   for (const b of tempBuffs) {
-    tempCritChanceAdd += b.critChanceAdd;
-    tempCritDamageAdd += b.critDamageAdd;
+    tempCritChanceAdd += b.critChanceAdd || 0;
+    tempCritDamageAdd += b.critDamageAdd || 0;
+    tempFireRatePct += b.fireRatePct || 0;
+    tempRangePct += b.rangePct || 0;
+    tempSpeedPct += b.speedPct || 0;
   }
 
   const permCritChance = clamp(
@@ -98,23 +148,20 @@ export function getEffectiveStats() {
     0,
     CONFIG.MAX_PERM_CRIT_CHANCE
   );
-
-  // total crit chance can not exceed MAX_TOTAL_CRIT_CHANCE
   let totalCritChance = permCritChance + tempCritChanceAdd;
-  totalCritChance = clamp(
-    totalCritChance,
-    0,
-    CONFIG.MAX_TOTAL_CRIT_CHANCE
-  );
+  totalCritChance = clamp(totalCritChance, 0, CONFIG.MAX_TOTAL_CRIT_CHANCE);
 
   const critMult =
-    baseCritMult *
-    (1 + permanent.critDamagePct + tempCritDamageAdd);
+    baseCritMult * (1 + permanent.critDamagePct + tempCritDamageAdd);
 
-  const moveSpeed = baseMove * (1 + permanent.speedPct);
-  const fireRate = baseFireRate * (1 + permanent.fireRatePct);
-  const range = baseRange * (1 + permanent.rangePct);
+  const moveSpeed = baseMove * (1 + permanent.speedPct + tempSpeedPct);
+  const fireRate = baseFireRate * (1 + permanent.fireRatePct + tempFireRatePct);
+  const range = baseRange * (1 + permanent.rangePct + tempRangePct);
   const damage = baseDamage * (1 + permanent.damagePct);
+
+  const tempTimeLeft = tempBuffs.length
+    ? Math.max(...tempBuffs.map((b) => b.time))
+    : 0;
 
   return {
     moveSpeed,
@@ -123,8 +170,6 @@ export function getEffectiveStats() {
     damage,
     critChance: totalCritChance,
     critMult,
-    tempCritTimeLeft: tempBuffs.length
-      ? Math.max(...tempBuffs.map((b) => b.time))
-      : 0,
+    tempCritTimeLeft: tempTimeLeft,
   };
 }

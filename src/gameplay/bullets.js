@@ -1,5 +1,5 @@
 import { CONFIG } from "../core/config.js";
-import { computeDamage, rollCrit } from "./crit.js";
+import { rollCrit, computeDamage } from "./crit.js";
 
 export function spawnBullet(world, player, eff) {
   const dirX = Math.cos(player.facing);
@@ -7,7 +7,7 @@ export function spawnBullet(world, player, eff) {
   const isCrit = rollCrit(eff.critChance);
   const dmg = computeDamage(eff.damage, isCrit, eff.critMult);
 
-  const bullet = {
+  const b = {
     x: player.x + dirX * (player.radius + 6),
     y: player.y + dirY * (player.radius + 6),
     vx: dirX * CONFIG.BULLET_SPEED,
@@ -18,22 +18,18 @@ export function spawnBullet(world, player, eff) {
     traveled: 0,
     maxDist: eff.range,
   };
-
-  world.bullets.push(bullet);
+  world.bullets.push(b);
 }
 
 export function updateBullets(world, dt) {
-  const bullets = world.bullets;
-  for (let i = bullets.length - 1; i >= 0; i--) {
-    const b = bullets[i];
+  for (let i = world.bullets.length - 1; i >= 0; i--) {
+    const b = world.bullets[i];
     b.x += b.vx * dt;
     b.y += b.vy * dt;
-    const dx = b.vx * dt;
-    const dy = b.vy * dt;
-    b.traveled += Math.hypot(dx, dy);
+    const step = Math.hypot(b.vx * dt, b.vy * dt);
+    b.traveled += step;
     if (b.traveled >= b.maxDist) {
-      bullets.splice(i, 1);
-      continue;
+      world.bullets.splice(i, 1);
     }
   }
 }

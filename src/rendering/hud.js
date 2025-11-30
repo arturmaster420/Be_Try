@@ -21,7 +21,6 @@ export function renderHUD(world) {
   `;
 
   const hpPct = (world.player.hp / world.player.maxHp) * 100;
-
   const right = document.createElement("div");
   right.className = "right";
   right.innerHTML = `
@@ -40,44 +39,65 @@ export function renderHUD(world) {
   const left2 = document.createElement("div");
   left2.className = "left";
   left2.innerHTML = `
-    <span class="badge perm">+Crit%: ${(perm.critChance * 100).toFixed(
-      1
-    )}</span>
-    <span class="badge perm">+CritDmg%: ${(perm.critDamagePct * 100).toFixed(
-      1
-    )}</span>
-    <span class="badge perm">+FireRate%: ${(perm.fireRatePct * 100).toFixed(
-      1
-    )}</span>
+    <span class="badge perm">+Crit%: ${(perm.critChance * 100).toFixed(1)}</span>
+    <span class="badge perm">+CritDmg%: ${(perm.critDamagePct * 100).toFixed(1)}</span>
+    <span class="badge perm">+FireRate%: ${(perm.fireRatePct * 100).toFixed(1)}</span>
     <span class="badge perm">+Range%: ${(perm.rangePct * 100).toFixed(1)}</span>
     <span class="badge perm">+Speed%: ${(perm.speedPct * 100).toFixed(1)}</span>
-    <span class="badge perm">+Damage%: ${(perm.damagePct * 100).toFixed(
-      1
-    )}</span>
+    <span class="badge perm">+Damage%: ${(perm.damagePct * 100).toFixed(1)}</span>
   `;
 
   const right2 = document.createElement("div");
   right2.className = "right";
 
   const tempTime = eff.tempCritTimeLeft;
-  if (tempTime > 0) {
-    right2.innerHTML = `
-      <span class="badge buff">Booster: ${tempTime.toFixed(0)}s</span>
-    `;
-  } else {
-    right2.innerHTML = `
-      <span class="badge">Booster: none</span>
-    `;
-  }
+  right2.innerHTML =
+    tempTime > 0
+      ? `<span class="badge buff">Booster: ${tempTime.toFixed(0)}s</span>`
+      : `<span class="badge">Booster: none</span>`;
 
   line2.appendChild(left2);
   line2.appendChild(right2);
   ui.appendChild(line2);
+
+  const line3 = document.createElement("div");
+  line3.className = "line";
+  const left3 = document.createElement("div");
+  left3.className = "left";
+  left3.innerHTML = `
+    <span class="badge">Best wave: ${world.bestWave}</span>
+    <span class="badge">Best time: ${formatTime(world.bestTime)}</span>
+  `;
+  line3.appendChild(left3);
+  ui.appendChild(line3);
+}
+
+function formatTime(t) {
+  if (!t || t <= 0) return "0:00";
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function renderOverlays(world) {
-  // remove old overlays
   document.querySelectorAll(".overlay").forEach((el) => el.remove());
+
+  if (!world.started) {
+    const ov = document.createElement("div");
+    ov.className = "overlay menu";
+    ov.innerHTML = `
+      <span>
+        <h1>BE_TRY</h1>
+        <p>Best score: ${world.highScore.toFixed(0)}</p>
+        <p>Best wave: ${world.bestWave}</p>
+        <p>Best time: ${formatTime(world.bestTime)}</p>
+        <p class="small">Press SPACE or CLICK to play</p>
+        <p class="small">WASD / Arrows + Mouse, or tap & drag on mobile</p>
+      </span>
+    `;
+    document.body.appendChild(ov);
+    return;
+  }
 
   if (world.paused) {
     const ov = document.createElement("div");
@@ -92,7 +112,7 @@ export function renderOverlays(world) {
 
     const hint = document.createElement("div");
     hint.className = "overlay small";
-    hint.innerHTML = "<span>Press R to restart</span>";
+    hint.innerHTML = "<span>Press SPACE or R to restart</span>";
     document.body.appendChild(hint);
   }
 }

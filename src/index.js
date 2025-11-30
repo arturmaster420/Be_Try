@@ -1,7 +1,7 @@
 import "./style.css";
 import { CONFIG } from "./core/config.js";
 import { initInput } from "./core/input.js";
-import { createWorld, resetWorld, updateWorld, togglePause } from "./core/world.js";
+import { createWorld, resetWorld } from "./core/world.js";
 import { renderFrame } from "./rendering/renderer.js";
 
 const canvas = document.getElementById("game");
@@ -21,16 +21,13 @@ function resizeCanvas() {
   canvas.style.width = w + "px";
   canvas.style.height = h + "px";
 }
-
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 
 initInput(canvas);
-
 const world = createWorld();
 
 let lastTime = performance.now();
-
 function loop(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.1);
   lastTime = now;
@@ -40,14 +37,26 @@ function loop(now) {
 
   requestAnimationFrame(loop);
 }
-
+import { updateWorld } from "./core/world.js";
 requestAnimationFrame(loop);
 
-// Controls: pause + restart
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyP") {
-    togglePause(world);
+    if (world.started && !world.gameOver) {
+      world.paused = !world.paused;
+    }
   } else if (e.code === "KeyR") {
+    world.started = true;
+    resetWorld(world);
+  } else if (e.code === "Space") {
+    world.started = true;
+    resetWorld(world);
+  }
+});
+
+canvas.addEventListener("click", () => {
+  if (!world.started || world.gameOver) {
+    world.started = true;
     resetWorld(world);
   }
 });

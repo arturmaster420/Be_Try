@@ -1,4 +1,3 @@
-import { CONFIG } from "../core/config.js";
 import { drawBackground } from "./background.js";
 import { renderHUD, renderOverlays } from "./hud.js";
 
@@ -8,7 +7,14 @@ export function renderFrame(ctx, world) {
   ctx.save();
   ctx.translate(-world.camera.x, -world.camera.y);
 
-  // pickups
+  for (const h of world.hitEffects) {
+    const alpha = Math.max(0, h.time / 0.12);
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+    ctx.arc(h.x, h.y, h.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   for (const p of world.pickups) {
     ctx.beginPath();
     ctx.fillStyle = "#4dff88";
@@ -16,13 +22,11 @@ export function renderFrame(ctx, world) {
     ctx.fill();
   }
 
-  // enemies
   for (const e of world.enemies) {
     ctx.beginPath();
     ctx.fillStyle = e.color;
     ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
     ctx.fill();
-
     if (e.isBoss) {
       ctx.strokeStyle = "rgba(255,255,255,0.3)";
       ctx.lineWidth = 2;
@@ -32,7 +36,6 @@ export function renderFrame(ctx, world) {
     }
   }
 
-  // bullets
   for (const b of world.bullets) {
     ctx.beginPath();
     ctx.fillStyle = b.isCrit ? "#ffe066" : "#ffffff";
@@ -40,7 +43,6 @@ export function renderFrame(ctx, world) {
     ctx.fill();
   }
 
-  // player
   const p = world.player;
   ctx.save();
   ctx.translate(p.x, p.y);
@@ -55,7 +57,6 @@ export function renderFrame(ctx, world) {
   ctx.fill();
   ctx.restore();
 
-  // floating messages
   for (const m of world.messages) {
     ctx.save();
     ctx.globalAlpha = Math.max(0, m.time / 4);
