@@ -1,165 +1,128 @@
-import { ENEMIES, WORLD, WAVES } from './config.js';
-import { randRange, normalize } from './math.js';
-import { addXP, damagePlayer } from './player.js';
-import { PICKUPS, XP } from './config.js';
+// src/gameplay/enemies.js
+// Минималистичная система врагов для Be_Try core
 
-export function spawnWave(world) {
-  world.pendingSpawn = [];
+import { CONFIG } from "../core/config.js";
 
-  const count = WAVES.baseEnemies + (world.wave - 1) * WAVES.perWaveIncrease;
-  for (let i = 0; i < count; i++) {
-    const type = i % 3 === 0 ? 'fast' : i % 5 === 0 ? 'tank' : 'normal';
-    world.pendingSpawn.push({ type });
-  }
-
-  // boss
-  if (world.wave % WAVES.bossEvery === 0) {
-    world.pendingSpawn.push({ type: 'boss' });
-  }
-
-  // booster boss chance
-  if (Math.random() < WAVES.boosterChance) {
-    world.pendingSpawn.push({ type: 'boosterBoss' });
-  }
-
-  world.spawnTimer = 0;
+// Вспомогательные функции
+function randRange(min, max) {
+  return min + Math.random() * (max - min);
 }
 
-export function updateSpawns(world, dt) {
-  world.spawnTimer -= dt;
-  if (world.spawnTimer > 0) return;
-  const batch = 4;
-  world.spawnTimer = 1.0;
-
-  for (let i = 0; i < batch && world.pendingSpawn.length > 0; i++) {
-    const next = world.pendingSpawn.pop();
-    spawnEnemy(world, next.type);
-  }
-
-  if (world.pendingSpawn.length === 0 && world.enemies.length === 0) {
-    // next wave
-    world.wave += 1;
-    spawnWave(world);
-  }
+function randFloat(min, max) {
+  return min + Math.random() * (max - min);
 }
 
-function spawnEnemy(world, type) {
-  const data = ENEMIES[type];
-  const p = world.player;
+// Создание врага по типу
+function createEnemy(type = "normal") {
+  if (type === "boss") {
+    return {
+      type,
+      x: 0,
+      y: 0,
+      radius: 35,
+      hp: 300,
+      maxHp: 300,
+      speed: 22,
+      dead: false,
+    };
+  }
 
-  const viewRadius = Math.min(world.canvasWidth, world.canvasHeight) * 0.7 / world.camera.zoom;
-  const dist = viewRadius + 260; // spawn just outside view, not too far
-
-  const angle = randRange(0, Math.PI * 2);
-  const x = p.x + Math.cos(angle) * dist;
-  const y = p.y + Math.sin(angle) * dist;
-
-  const enemy = {
+  // Обычный враг
+  return {
     type,
-    x,
-    y,
-    vx: 0,
-    vy: 0,
-    radius: data.radius,
-    speed: data.speed,
-    hp: data.hp,
-    damage: data.damage,
+    x: 0,
+    y: 0,
+    radius: 18,
+    hp: 35,
+    maxHp: 35,
+    speed: 45,
+    dead: false,
   };
-  world.enemies.push(enemy);
 }
 
+// Спавн одного врага вокруг игрока
+export function spawnEnemy(world, type = "normal") {
+  const player = world.player;
+
+  // Спавним не слишком далеко, но и не в кадре
+  const inner = 800;
+  const outer = 1400;
+  const distance = randRange(inner, outer);
+  const angle = randFloat(0, Math.PI * 2);
+
+  const e = createEnemy(type);
+  e.x = player.x + Math.cos(angle) * distance;
+  e.y = player.y + Math.sin(angle) * distance;
+
+  world.enemies.push(e);
+}
+
+// Спавн волны
+export function spawnWave(world) {
+  const wave = world.wave || 1;
+
+  // Базовое количество врагов: растёт с волной
+  const baseCount = 6 + wave * 2;
+
+  for (let i = 0; i < baseCount; i++) {
+    // Вероятность босса (можно подправить)
+    const isBoss = Math.random() < (world.bossChance || 0.05);
+    spawnEnemy(world, isBoss ? "boss" : "normal");
+  }
+}
+
+// Обновление таймера волн
+export function updateSpawns(world, dt) {
+  if (world.spawnTimer == null) {
+    world.spawnTimer = 0;
+  }
+
+  world.spawnTimer -= dt;
+
+  if (world.spawnTimer <= 0) {
+    // Новая волна
+    world.wave = (world.wave || 1) + 1;
+    spawnWave(world);
+
+    // Интервал между волнами, можно регулировать
+    world.spawnTimer = 8;
+  }
+}
+
+// Обновление всех врагов
 export function updateEnemies(world, dt) {
-  const p = world.player;
+  const player = world.player;
+  const enemies = world.enemies;
 
-  for (let i = world.enemies.length - 1; i >= 0; i--) {
-    const e = world.enemies[i];
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.dead) continue;
 
-    // move towards player
-    const [nx, ny] = normalize(p.x - e.x, p.y - e.y);
-    e.vx = nx * e.speed;
-    e.vy = ny * e.speed;
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy) || 1;
 
-    e.x += e.vx * dt;
-    e.y += e.vy * dt;
+    // Движение к игроку
+    const speed = e.speed * dt;
+    e.x += (dx / dist) * speed;
+    e.y += (dy / dist) * speed;
 
-    // collision with player
-    const dx = e.x - p.x;
-    const dy = e.y - p.y;
-    const distSq = dx * dx + dy * dy;
-    const rad = e.radius + p.radius;
-    if (distSq < rad * rad) {
-      damagePlayer(world, e.damage);
-      // small knockback
-      p.x -= nx * 18;
-      p.y -= ny * 18;
+    // Простое столкновение с игроком
+    if (dist < e.radius + player.radius) {
+      // Урон игроку, если HP не бесконечный
+      if (!CONFIG.infiniteHP) {
+        player.hp -= 5;
+        if (player.hp < 0) player.hp = 0;
+      }
     }
 
-    if (e.hp <= 0) {
-      onEnemyKilled(world, e);
-      world.enemies.splice(i, 1);
+    // Смерть врага
+    if (e.hp <= 0 && !e.dead) {
+      e.dead = true;
+      world.score += e.type === "boss" ? 150 : 25;
     }
   }
-}
 
-function onEnemyKilled(world, enemy) {
-  const p = world.player;
-  world.score += 10;
-
-  if (enemy.type === 'boss') {
-    addXP(world, XP.bossXP);
-    spawnRandomPermanentBuff(world, enemy.x, enemy.y);
-  } else if (enemy.type === 'boosterBoss') {
-    addXP(world, XP.bossXP);
-    spawnBoosterBuff(world, enemy.x, enemy.y);
-  } else {
-    addXP(world, XP.enemyXP);
-  }
-
-  // chance to drop HP pickup
-  if (Math.random() < 0.18) {
-    world.pickups.push({
-      kind: 'hp',
-      x: enemy.x,
-      y: enemy.y,
-      radius: PICKUPS.hp.radius,
-    });
-  }
-}
-
-import { applyPermanentCritChanceBonus, applyTempCritChanceBonus, applyTempCritDamageBonus } from './crit.js';
-
-function spawnRandomPermanentBuff(world, x, y) {
-  // Each boss kill grants random permanent buff
-  const options = ['critChance', 'critDamage', 'fireRate', 'range', 'move', 'damage'];
-  const pick = options[Math.floor(Math.random() * options.length)];
-  switch (pick) {
-    case 'critChance':
-      applyPermanentCritChanceBonus(world, 0.01);
-      break;
-    case 'critDamage':
-      world.stats.critMult += 0.05;
-      break;
-    case 'fireRate':
-      world.stats.fireRateMul += 0.01;
-      break;
-    case 'range':
-      world.stats.rangeMul += 0.01;
-      break;
-    case 'move':
-      world.stats.moveMul += 0.01;
-      break;
-    case 'damage':
-      world.stats.damageMul += 0.01;
-      break;
-  }
-}
-
-function spawnBoosterBuff(world, x, y) {
-  // booster boss -> temporary crit / crit damage buffs
-  const choice = Math.random() < 0.5 ? 'critChance' : 'critDamage';
-  if (choice === 'critChance') {
-    applyTempCritChanceBonus(world, 0.2, 180);
-  } else {
-    applyTempCritDamageBonus(world, 1.5, 180);
-  }
+  // Чистим мёртвых
+  world.enemies = enemies.filter((e) => !e.dead);
 }
