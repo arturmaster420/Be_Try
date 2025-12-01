@@ -1,54 +1,138 @@
-export const CONFIG = {
-  CANVAS_WIDTH: 960,
-  CANVAS_HEIGHT: 540,
-  WORLD_RADIUS: 4500,
+// Global game configuration
 
-  PLAYER_RADIUS: 14,
-  PLAYER_BASE_HP: 100,
-  PLAYER_BASE_MOVE_SPEED: 220,
-  PLAYER_BASE_FIRE_RATE: 3.0,
-  PLAYER_BASE_BULLET_RANGE: 650,
-  PLAYER_BASE_DAMAGE: 12,
+export const WORLD = {
+  width: 9000,
+  height: 9000,
+};
 
-  BULLET_SPEED: 620,
-  BULLET_RADIUS: 4,
+export const CAMERA = {
+  baseZoom: 1.0,
+  zoomLevelFactor: 0.03, // each level slightly zooms out
+};
 
-  ENEMY_RADIUS: 15,
-  ENEMY_BASE_SPEED: 70,
-  ENEMY_BASE_HP: 30,
-  ENEMY_CONTACT_DMG: 20,
+export const PLAYER = {
+  radius: 18,
+  baseMoveSpeed: 220,
+  accel: 1800,
+  maxSpeed: 320,
+  friction: 0.9,
+  startHP: 100,
+};
 
-  BOSS_RADIUS: 30,
-  BOSS_HP_MULT: 10,
-  BOSS_SPEED_MULT: 0.7,
+export const WEAPONS = {
+  pistol: {
+    id: 'pistol',
+    name: 'Pistol',
+    baseDamage: 10,
+    baseFireRate: 1.5, // reduced, used with global fireRate multiplier
+    baseRange: 650,
+    bulletSpeed: 680,
+  },
+  rifle: {
+    id: 'rifle',
+    name: 'Rifle',
+    baseDamage: 7,
+    baseFireRate: 4.0,
+    baseRange: 750,
+    bulletSpeed: 880,
+  },
+  shotgun: {
+    id: 'shotgun',
+    name: 'Shotgun',
+    pellets: 6,
+    spread: Math.PI / 8,
+    baseDamage: 5,
+    baseFireRate: 1.2,
+    baseRange: 520,
+    bulletSpeed: 720,
+  },
+  rocket: {
+    id: 'rocket',
+    name: 'Rocket',
+    baseDamage: 40,
+    splashRadius: 110,
+    baseFireRate: 0.8,
+    baseRange: 900,
+    rocketSpeed: 520,
+  },
+  laser: {
+    id: 'laser',
+    name: 'Laser',
+    baseDamage: 10, // will be multiplied by 0.5 and crit etc.
+    baseFireRate: 2.0,
+    baseRange: 650,
+  },
+};
 
-  PICKUP_RADIUS: 9,
-  PICKUP_HEAL_AMOUNT: 18,
+export const STATS = {
+  baseCritChance: 0.0,
+  baseCritMult: 2.0,
+  maxPermanentCritChance: 0.7,
+  maxTotalCritChance: 0.9,
+  baseFireRateMul: 1.0,
+  baseRangeMul: 1.0,
+  baseMoveMul: 1.0,
+  baseDamageMul: 1.0,
+};
 
-  BOOSTER_CRIT_CHANCE_ADD: 0.20,
-  BOOSTER_CRIT_DAMAGE_ADD: 0.50,
-  BOOSTER_CRIT_DURATION: 180,
+export const XP = {
+  baseToLevel: 60,
+  levelScale: 1.25,
+  enemyXP: 8,
+  bossXP: 50,
+};
 
-  BOOSTER_UTILITY_FIRE_ADD: 0.20,
-  BOOSTER_UTILITY_RANGE_ADD: 0.20,
-  BOOSTER_UTILITY_SPEED_ADD: 0.10,
-  BOOSTER_UTILITY_DURATION: 60,
+export const ENEMIES = {
+  normal: {
+    radius: 16,
+    speed: 120,
+    hp: 30,
+    damage: 10,
+  },
+  fast: {
+    radius: 13,
+    speed: 200,
+    hp: 20,
+    damage: 8,
+  },
+  tank: {
+    radius: 22,
+    speed: 80,
+    hp: 85,
+    damage: 18,
+  },
+  boss: {
+    radius: 38,
+    speed: 90,
+    hp: 400,
+    damage: 30,
+  },
+  boosterBoss: {
+    radius: 30,
+    speed: 120,
+    hp: 260,
+    damage: 18,
+  },
+};
 
-  BASE_CRIT_CHANCE: 0.0,
-  BASE_CRIT_MULT: 2.0,
-  MAX_PERM_CRIT_CHANCE: 0.70,
-  MAX_TOTAL_CRIT_CHANCE: 0.90,
+export const PICKUPS = {
+  hp: {
+    radius: 10,
+    healAmount: 10, // unlimited HP, +10 per pickup
+  },
+  xpOrb: {
+    radius: 9,
+  },
+};
 
-  WAVE_BASE_ENEMIES: 7,
-  WAVE_ENEMY_GROWTH: 1.25,
-  WAVE_BOSS_INTERVAL: 3,
+export const WAVES = {
+  baseEnemies: 10,
+  perWaveIncrease: 4,
+  bossEvery: 5,
+  boosterChance: 0.2,
+};
 
-  BOOSTER_MIN_INTERVAL: 18,
-  BOOSTER_RANDOM_CHANCE: 0.45,
-
-  PICKUP_MAGNET_BASE: 100,
-  PICKUP_MAGNET_PER_WAVE: 14,
-
-  XP_PER_KILL: 8,
-  XP_LEVEL_BASE: 40
+export const LASER = {
+  beamLifetime: 0.08,
+  thickness: 8,
 };

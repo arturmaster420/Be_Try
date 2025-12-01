@@ -1,70 +1,85 @@
-import { CONFIG } from "./config.js";
-import { angleTo, normalize } from "./math.js";
-import { input, isKeyDown } from "./input.js";
-import { getEffectiveStats } from "../gameplay/buffs.js";
-import { spawnBulletPattern } from "../gameplay/bullets.js";
+import { PLAYER, CAMERA, XP } from './config.js';
+import { clamp, normalize } from './math.js';
+import { isKeyDown, input } from './input.js';
+import { updateWeaponByLevel } from './weapons.js';
 
-export function createPlayer() {
-  return {
-    x: 0,
-    y: 0,
-    radius: CONFIG.PLAYER_RADIUS,
-    hp: CONFIG.PLAYER_BASE_HP,
-    maxHp: CONFIG.PLAYER_BASE_HP,
-    facing: 0,
-    lastShot: 0,
-    level: 1,
-    xp: 0,
-    xpToNext: CONFIG.XP_LEVEL_BASE,
-  };
-}
-
-export function resetPlayer(p) {
-  p.x = 0;
-  p.y = 0;
-  p.hp = p.maxHp;
-  p.lastShot = 0;
-  p.level = 1;
-  p.xp = 0;
-  p.xpToNext = CONFIG.XP_LEVEL_BASE;
-}
-
-export function updatePlayer(world, dt, weaponSystem) {
+export function updatePlayer(world, dt) {
   const p = world.player;
-  const eff = getEffectiveStats();
 
-  let dx = 0;
-  let dy = 0;
-  if (isKeyDown("KeyW") || isKeyDown("ArrowUp")) dy -= 1;
-  if (isKeyDown("KeyS") || isKeyDown("ArrowDown")) dy += 1;
-  if (isKeyDown("KeyA") || isKeyDown("ArrowLeft")) dx -= 1;
-  if (isKeyDown("KeyD") || isKeyDown("ArrowRight")) dx += 1;
+  // movement input
+  let ax = 0;
+  let ay = 0;
+  if (isKeyDown('w') || isKeyDown('arrowup')) ay -= 1;
+  if (isKeyDown('s') || isKeyDown('arrowdown')) ay += 1;
+  if (isKeyDown('a') || isKeyDown('arrowleft')) ax -= 1;
+  if (isKeyDown('d') || isKeyDown('arrowright')) ax += 1;
 
-  if (dx || dy) {
-    const n = normalize(dx, dy);
-    p.x += n.x * eff.moveSpeed * dt;
-    p.y += n.y * eff.moveSpeed * dt;
+  if (ax !== 0 || ay !== 0) {
+    const [nx, ny] = normalize(ax, ay);
+    const accel = PLAYER.accel * world.stats.moveMul;
+    p.vx += nx * accel * dt;
+    p.vy += ny * accel * dt;
   }
 
-  const r2 = p.x * p.x + p.y * p.y;
-  if (r2 > world.radius * world.radius) {
-    const len = Math.sqrt(r2) || 1;
-    p.x = (p.x / len) * world.radius;
-    p.y = (p.y / len) * world.radius;
+  // apply friction
+  p.vx *= PLAYER.friction;
+  p.vy *= PLAYER.friction;
+
+  const maxSpeed = PLAYER.maxSpeed * world.stats.moveMul;
+  const speed = Math.hypot(p.vx, p.vy);
+  if (speed > maxSpeed) {
+    const [nx, ny] = [p.vx / speed, p.vy / speed];
+    p.vx = nx * maxSpeed;
+    p.vy = ny * maxSpeed;
   }
 
-  const mxWorld = world.camera.x + input.mouse.x;
-  const myWorld = world.camera.y + input.mouse.y;
-  p.facing = angleTo(p.x, p.y, mxWorld, myWorld);
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
 
-  weaponSystem.updateCurrentWeapon(world);
+  // clamp to world bounds
+  p.x = clamp(p.x, 0, world.width || 9000);
+  p.y = clamp(p.y, 0, world.height || 9000);
 
-  p.lastShot += dt;
-  const weapon = weaponSystem.getWeapon(world);
-  const fireInterval = 1 / (eff.fireRate * weapon.fireRateMul);
+  // camera follows
+  world.camera.x = p.x;
+  world.camera.y = p.y;
 
-  if (input.mouse.down && p.lastShot >= fireInterval) {
-    spawnBulletPattern(world, eff, weapon);
-    p.lastShot = 0;
+  // camera zoom based on level: more level => more view => smaller zoom
+  const lvl = p.level;
+  const factor = CAMERA.zoomLevelFactor;
+  world.camera.zoom = 1 / (1 + lvl * factor);
+
+  world.runTime += dt;
+}
+
+// XP / leveling
+export function addXP(world, amount) {
+  const p = world.player;
+  p.xp += amount;
+  while (p.xp >= p.xpToNext) {
+    p.xp -= p.xpToNext;
+    p.level += 1;
+    p.xpToNext = Math.floor(p.xpToNext * XP.levelScale);
+    updateWeaponByLevel(world);
   }
+}
+
+// Damage / HP
+export function damagePlayer(world, amount) {
+  const p = world.player;
+  p.hp -= amount;
+  if (p.hp <= 0) {
+    p.hp = 0;
+    world.state = 'gameover';
+    // update highscores
+    world.bestScore = Math.max(world.bestScore, world.score);
+    world.bestWave = Math.max(world.bestWave, world.wave);
+    world.bestTime = Math.max(world.bestTime, world.runTime);
+  }
+}
+
+export function healPlayer(world, amount) {
+  const p = world.player;
+  // no max HP cap
+  p.hp += amount;
 }

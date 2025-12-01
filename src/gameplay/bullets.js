@@ -1,45 +1,95 @@
-import { CONFIG } from "../core/config.js";
-import { rollCrit, computeDamage } from "./crit.js";
+import { dist } from '../core/math.js';
+import { rollCrit } from '../core/crit.js';
+import { LASER } from '../core/config.js';
 
-export function spawnBulletPattern(world, eff, weapon) {
-  const p = world.player;
-  const baseAngle = p.facing;
-  const count = weapon.bulletsPerShot || 1;
-  const spread = weapon.spread || 0;
+export function updateProjectiles(world, dt) {
+  const bullets = world.projectiles;
+  const enemies = world.enemies;
 
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0.5 : i / (count - 1);
-    const offset = (t - 0.5) * spread;
-    const ang = baseAngle + offset;
-    const dirX = Math.cos(ang);
-    const dirY = Math.sin(ang);
-    const isCrit = rollCrit(eff.critChance);
-    const dmg = computeDamage(eff.damage * weapon.damageMul, isCrit, eff.critMult);
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.life -= dt;
 
-    world.bullets.push({
-      x: p.x + dirX * (p.radius + 6),
-      y: p.y + dirY * (p.radius + 6),
-      vx: dirX * CONFIG.BULLET_SPEED,
-      vy: dirY * CONFIG.BULLET_SPEED,
-      radius: CONFIG.BULLET_RADIUS,
-      isCrit,
-      damage: dmg,
-      maxDist: eff.range,
-      traveled: 0,
-    });
+    if (b.life <= 0) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const e = enemies[j];
+      const d = dist(b, e);
+      if (d < e.radius + b.radius) {
+        const { isCrit, mult } = rollCrit(world);
+        const dmg = b.damage * mult;
+        e.hp -= dmg;
+        bullets.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  // rockets
+  updateRockets(world, dt);
+  // laser beams lifetime
+  for (let i = world.laserBeams.length - 1; i >= 0; i--) {
+    const beam = world.laserBeams[i];
+    beam.ttl -= dt;
+    if (beam.ttl <= 0) world.laserBeams.splice(i, 1);
   }
 }
 
-export function updateBullets(world, dt) {
-  for (let i = world.bullets.length - 1; i >= 0; i--) {
-    const b = world.bullets[i];
-    const dx = b.vx * dt;
-    const dy = b.vy * dt;
-    b.x += dx;
-    b.y += dy;
-    b.traveled += Math.hypot(dx, dy);
-    if (b.traveled >= b.maxDist) {
-      world.bullets.splice(i, 1);
+// Rockets with splash damage
+export function updateRockets(world, dt) {
+  const rockets = world.rockets;
+  const enemies = world.enemies;
+
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i];
+    r.x += r.vx * dt;
+    r.y += r.vy * dt;
+    r.life -= dt;
+
+    if (r.life <= 0) {
+      explode(world, r);
+      rockets.splice(i, 1);
+      continue;
+    }
+
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const e = enemies[j];
+      const d = dist(r, e);
+      if (d < e.radius + r.radius) {
+        explode(world, r);
+        rockets.splice(i, 1);
+        break;
+      }
     }
   }
 }
+
+function explode(world, rocket) {
+  const enemies = world.enemies;
+  const radius = rocket.splashRadius;
+  const { isCrit, mult } = rollCrit(world);
+
+  for (let j = enemies.length - 1; j >= 0; j--) {
+    const e = enemies[j];
+    const d = dist(rocket, e);
+    if (d < radius + e.radius) {
+      const falloff = 1 - d / (radius + e.radius);
+      const dmg = rocket.damage * falloff * mult;
+      e.hp -= dmg;
+    }
+  }
+
+  world.explosions.push({
+    x: rocket.x,
+    y: rocket.y,
+    radius,
+    ttl: 0.25,
+  });
+}
+
+// Laser damage is handled when firing

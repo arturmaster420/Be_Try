@@ -1,145 +1,165 @@
-import { CONFIG } from "../core/config.js";
-import { randRange, dist2, normalize } from "../core/math.js";
-import { applyBoosterBuff, applyRandomPermanentUpgrade } from "./buffs.js";
+import { ENEMIES, WORLD, WAVES } from './config.js';
+import { randRange, normalize } from './math.js';
+import { addXP, damagePlayer } from './player.js';
+import { PICKUPS, XP } from './config.js';
 
-export function spawnEnemy(world, wave) {
-  const angle = randRange(0, Math.PI * 2);
-  const r = randRange(world.radius * 0.6, world.radius);
-  const x = Math.cos(angle) * r;
-  const y = Math.sin(angle) * r;
+export function spawnWave(world) {
+  world.pendingSpawn = [];
 
-  const hpScale = 1 + wave * 0.1;
-  const speedScale = 1 + wave * 0.04;
-
-  world.enemies.push({
-    x,
-    y,
-    radius: CONFIG.ENEMY_RADIUS,
-    hp: CONFIG.ENEMY_BASE_HP * hpScale,
-    maxHp: CONFIG.ENEMY_BASE_HP * hpScale,
-    speed: CONFIG.ENEMY_BASE_SPEED * speedScale,
-    color: "#ff4040",
-    isBoss: false,
-    isBooster: false,
-    boosterKind: null,
-    scoreValue: 6,
-  });
-}
-
-export function spawnBoss(world, kind, wave) {
-  const angle = randRange(0, Math.PI * 2);
-  const r = randRange(world.radius * 0.4, world.radius * 0.9);
-  const x = Math.cos(angle) * r;
-  const y = Math.sin(angle) * r;
-
-  const hpScale = CONFIG.BOSS_HP_MULT * (1 + wave * 0.14);
-  const speedScale = CONFIG.BOSS_SPEED_MULT * (1 + wave * 0.05);
-
-  let color = "#e045ff";
-  let isBooster = false;
-  let boosterKind = null;
-
-  if (kind === "crit") {
-    color = "#30d7ff";
-    isBooster = true;
-    boosterKind = "crit";
-  } else if (kind === "utility") {
-    color = "#30ff88";
-    isBooster = true;
-    boosterKind = "utility";
+  const count = WAVES.baseEnemies + (world.wave - 1) * WAVES.perWaveIncrease;
+  for (let i = 0; i < count; i++) {
+    const type = i % 3 === 0 ? 'fast' : i % 5 === 0 ? 'tank' : 'normal';
+    world.pendingSpawn.push({ type });
   }
 
-  world.enemies.push({
+  // boss
+  if (world.wave % WAVES.bossEvery === 0) {
+    world.pendingSpawn.push({ type: 'boss' });
+  }
+
+  // booster boss chance
+  if (Math.random() < WAVES.boosterChance) {
+    world.pendingSpawn.push({ type: 'boosterBoss' });
+  }
+
+  world.spawnTimer = 0;
+}
+
+export function updateSpawns(world, dt) {
+  world.spawnTimer -= dt;
+  if (world.spawnTimer > 0) return;
+  const batch = 4;
+  world.spawnTimer = 1.0;
+
+  for (let i = 0; i < batch && world.pendingSpawn.length > 0; i++) {
+    const next = world.pendingSpawn.pop();
+    spawnEnemy(world, next.type);
+  }
+
+  if (world.pendingSpawn.length === 0 && world.enemies.length === 0) {
+    // next wave
+    world.wave += 1;
+    spawnWave(world);
+  }
+}
+
+function spawnEnemy(world, type) {
+  const data = ENEMIES[type];
+  const p = world.player;
+
+  const viewRadius = Math.min(world.canvasWidth, world.canvasHeight) * 0.7 / world.camera.zoom;
+  const dist = viewRadius + 260; // spawn just outside view, not too far
+
+  const angle = randRange(0, Math.PI * 2);
+  const x = p.x + Math.cos(angle) * dist;
+  const y = p.y + Math.sin(angle) * dist;
+
+  const enemy = {
+    type,
     x,
     y,
-    radius: CONFIG.BOSS_RADIUS,
-    hp: CONFIG.ENEMY_BASE_HP * hpScale,
-    maxHp: CONFIG.ENEMY_BASE_HP * hpScale,
-    speed: CONFIG.ENEMY_BASE_SPEED * speedScale,
-    color,
-    isBoss: true,
-    isBooster,
-    boosterKind,
-    scoreValue: isBooster ? 40 : 60,
-  });
+    vx: 0,
+    vy: 0,
+    radius: data.radius,
+    speed: data.speed,
+    hp: data.hp,
+    damage: data.damage,
+  };
+  world.enemies.push(enemy);
 }
 
 export function updateEnemies(world, dt) {
   const p = world.player;
 
-  for (const e of world.enemies) {
-    const dir = normalize(p.x - e.x, p.y - e.y);
-    e.x += dir.x * e.speed * dt;
-    e.y += dir.y * e.speed * dt;
-  }
-
-  // bullets vs enemies
-  for (let i = world.bullets.length - 1; i >= 0; i--) {
-    const b = world.bullets[i];
-    let hit = false;
-
-    for (let j = world.enemies.length - 1; j >= 0; j--) {
-      const e = world.enemies[j];
-      const rr = e.radius * 1.2 + b.radius;
-      if (dist2(b.x, b.y, e.x, e.y) <= rr * rr) {
-        e.hp -= b.damage;
-        hit = true;
-
-        if (e.hp <= 0) {
-          world.score += e.scoreValue;
-          world.waveKills += 1;
-          world.player.xp += world.xpPerKill;
-
-          if (e.isBoss) {
-            if (e.isBooster) {
-              const msg = applyBoosterBuff(e.boosterKind || "crit");
-              world.messages.push({
-                text: msg,
-                time: 2.5,
-                color: e.boosterKind === "utility" ? "#30ff88" : "#30d7ff",
-              });
-            } else {
-              applyRandomPermanentUpgrade();
-              world.messages.push({
-                text: "Permanent boss upgrade",
-                time: 2.5,
-                color: "#e045ff",
-              });
-            }
-          }
-
-          // small chance of heal pickup from normal enemies
-          if (!e.isBooster && Math.random() < 0.22) {
-            world.pickups.push({
-              x: e.x,
-              y: e.y,
-              radius: CONFIG.PICKUP_RADIUS,
-              type: "heal",
-            });
-          }
-
-          world.enemies.splice(j, 1);
-        }
-
-        if (hit) break;
-      }
-    }
-
-    if (hit) {
-      world.bullets.splice(i, 1);
-    }
-  }
-
-  // enemies contact damage
   for (let i = world.enemies.length - 1; i >= 0; i--) {
     const e = world.enemies[i];
-    const rr = e.radius + p.radius;
-    if (dist2(e.x, e.y, p.x, p.y) <= rr * rr) {
-      p.hp -= CONFIG.ENEMY_CONTACT_DMG * dt;
-      if (p.hp <= 0) {
-        p.hp = 0;
-        world.state = "gameover";
-      }
+
+    // move towards player
+    const [nx, ny] = normalize(p.x - e.x, p.y - e.y);
+    e.vx = nx * e.speed;
+    e.vy = ny * e.speed;
+
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+
+    // collision with player
+    const dx = e.x - p.x;
+    const dy = e.y - p.y;
+    const distSq = dx * dx + dy * dy;
+    const rad = e.radius + p.radius;
+    if (distSq < rad * rad) {
+      damagePlayer(world, e.damage);
+      // small knockback
+      p.x -= nx * 18;
+      p.y -= ny * 18;
     }
+
+    if (e.hp <= 0) {
+      onEnemyKilled(world, e);
+      world.enemies.splice(i, 1);
+    }
+  }
+}
+
+function onEnemyKilled(world, enemy) {
+  const p = world.player;
+  world.score += 10;
+
+  if (enemy.type === 'boss') {
+    addXP(world, XP.bossXP);
+    spawnRandomPermanentBuff(world, enemy.x, enemy.y);
+  } else if (enemy.type === 'boosterBoss') {
+    addXP(world, XP.bossXP);
+    spawnBoosterBuff(world, enemy.x, enemy.y);
+  } else {
+    addXP(world, XP.enemyXP);
+  }
+
+  // chance to drop HP pickup
+  if (Math.random() < 0.18) {
+    world.pickups.push({
+      kind: 'hp',
+      x: enemy.x,
+      y: enemy.y,
+      radius: PICKUPS.hp.radius,
+    });
+  }
+}
+
+import { applyPermanentCritChanceBonus, applyTempCritChanceBonus, applyTempCritDamageBonus } from './crit.js';
+
+function spawnRandomPermanentBuff(world, x, y) {
+  // Each boss kill grants random permanent buff
+  const options = ['critChance', 'critDamage', 'fireRate', 'range', 'move', 'damage'];
+  const pick = options[Math.floor(Math.random() * options.length)];
+  switch (pick) {
+    case 'critChance':
+      applyPermanentCritChanceBonus(world, 0.01);
+      break;
+    case 'critDamage':
+      world.stats.critMult += 0.05;
+      break;
+    case 'fireRate':
+      world.stats.fireRateMul += 0.01;
+      break;
+    case 'range':
+      world.stats.rangeMul += 0.01;
+      break;
+    case 'move':
+      world.stats.moveMul += 0.01;
+      break;
+    case 'damage':
+      world.stats.damageMul += 0.01;
+      break;
+  }
+}
+
+function spawnBoosterBuff(world, x, y) {
+  // booster boss -> temporary crit / crit damage buffs
+  const choice = Math.random() < 0.5 ? 'critChance' : 'critDamage';
+  if (choice === 'critChance') {
+    applyTempCritChanceBonus(world, 0.2, 180);
+  } else {
+    applyTempCritDamageBonus(world, 1.5, 180);
   }
 }
