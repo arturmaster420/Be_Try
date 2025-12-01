@@ -1,9 +1,8 @@
 import "./style.css";
-import { CONFIG } from "./core/config.js";
-import { initInput, isKeyDown } from "./core/input.js";
-import { createWorld, resetGame, updateWorld } from "./core/world.js";
-import { renderFrame } from "./rendering/renderer.js";
-import { createWeaponSystem } from "./gameplay/weaponSystem.js";
+import { CONFIG } from "./config.js";
+import { initInput, isKeyDown } from "./input.js";
+import { createWorld, resetGame, updateWorld } from "./world.js";
+import { render } from "./renderer.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -27,35 +26,50 @@ window.addEventListener("resize", resizeCanvas);
 
 initInput(canvas);
 const world = createWorld();
-const weaponSystem = createWeaponSystem();
 
 let lastTime = performance.now();
+let prevSpace = false;
+let prevP = false;
+let prevR = false;
+
 function loop(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.12);
   lastTime = now;
 
+  const space = isKeyDown("Space");
+  const p = isKeyDown("KeyP");
+  const r = isKeyDown("KeyR");
+
   if (world.state === "menu") {
-    if (isKeyDown("Space")) {
+    if (space && !prevSpace) {
       resetGame(world);
       world.state = "playing";
     }
   } else if (world.state === "playing") {
-    if (isKeyDown("KeyP")) {
+    if (p && !prevP) {
       world.state = "paused";
     }
   } else if (world.state === "paused") {
-    if (isKeyDown("KeyP")) {
+    if (p && !prevP) {
+      world.state = "playing";
+    }
+    if (r && !prevR) {
+      resetGame(world);
       world.state = "playing";
     }
   } else if (world.state === "gameover") {
-    if (isKeyDown("Space") || isKeyDown("KeyR")) {
+    if ((space && !prevSpace) || (r && !prevR)) {
       resetGame(world);
       world.state = "playing";
     }
   }
 
-  updateWorld(world, dt, weaponSystem);
-  renderFrame(ctx, world);
+  prevSpace = space;
+  prevP = p;
+  prevR = r;
+
+  updateWorld(world, dt);
+  render(ctx, world);
 
   requestAnimationFrame(loop);
 }
