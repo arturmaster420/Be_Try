@@ -9,21 +9,36 @@ export function createWorld() {
     canvasHeight: 600,
     mouseWorldX: 0,
     mouseWorldY: 0,
+
     score: 0,
     wave: 1,
     runTime: 0,
+
     bestScore: 0,
     bestWave: 0,
     bestTime: 0,
+
     enemies: [],
     bullets: [],
     rockets: [],
     explosions: [],
     laserBeams: [],
     pickups: [],
-    spawnTimer: 3,
+
     nextEnemyId: 1,
+
+    // волны
+    waveActive: false,
+    waveClearTimer: 0,
+    waveText: "",
+    waveTextTimer: 0,
+
+    // бафы от боссов
+    lastBossBuffText: "",
+    lastBoosterBuffText: "",
+
     stats: { ...STATS_BASE },
+
     player: {
       x: WORLD.width / 2,
       y: WORLD.height / 2,
@@ -34,11 +49,13 @@ export function createWorld() {
       xpToNext: 60,
       weaponId: "pistol",
     },
+
     camera: {
       x: WORLD.width / 2,
       y: WORLD.height / 2,
       zoom: 1.0,
     },
+
     currentWeapon: WEAPONS["pistol"],
     fireCooldown: 0,
   };
@@ -55,18 +72,25 @@ export function setCanvasSize(world, w, h) {
 }
 
 export function startGame(world) {
+  // сброс всего ранна
   world.state = "playing";
   world.score = 0;
   world.wave = 1;
   world.runTime = 0;
+
   world.enemies.length = 0;
   world.bullets.length = 0;
   world.rockets.length = 0;
   world.explosions.length = 0;
   world.laserBeams.length = 0;
   world.pickups.length = 0;
-  world.spawnTimer = 2;
+
+  world.nextEnemyId = 1;
+
   world.stats = { ...STATS_BASE };
+  world.lastBossBuffText = "";
+  world.lastBoosterBuffText = "";
+
   const p = world.player;
   p.x = WORLD.width / 2;
   p.y = WORLD.height / 2;
@@ -75,7 +99,14 @@ export function startGame(world) {
   p.xp = 0;
   p.xpToNext = 60;
   p.weaponId = "pistol";
+
   applyWeaponStats(world);
+
+  // первая волна сразу
+  world.waveActive = true;
+  world.waveClearTimer = 0;
+  world.waveText = "WAVE 1";
+  world.waveTextTimer = 2.5;
 }
 
 export function loadHighscore(world) {
@@ -119,6 +150,7 @@ export function levelUp(world) {
   p.xp = 0;
   p.xpToNext = Math.floor(p.xpToNext * 1.4);
 
+  // лёгкий рост параметров
   world.stats.damageMul *= 1.03;
   world.stats.fireRateMul *= 1.02;
   world.stats.rangeMul *= 1.01;

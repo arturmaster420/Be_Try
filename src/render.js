@@ -24,6 +24,7 @@ export function render(world, ctx) {
   ctx.restore();
 
   drawHUD(world, ctx);
+  drawWaveText(world, ctx);
   drawStateOverlay(world, ctx);
 }
 
@@ -57,8 +58,14 @@ function drawPlayer(world, ctx) {
 }
 
 function drawEnemies(world, ctx) {
-  ctx.fillStyle = "#ff5555";
   for (const e of world.enemies) {
+    if (e.type === "boss") {
+      ctx.fillStyle = "#ff9b00";
+    } else if (e.type === "booster") {
+      ctx.fillStyle = "#7bff9f";
+    } else {
+      ctx.fillStyle = "#ff5555";
+    }
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -147,21 +154,44 @@ function drawHUD(world, ctx) {
     `BestScore: ${world.bestScore.toFixed(0)}`,
     `BestWave: ${world.bestWave}`,
     `BestTime: ${world.bestTime.toFixed(1)}s`,
-    `Crit: ${(100 * (stats.critChancePermanent + stats.critChanceTemp)).toFixed(0)}%  x${stats.critMult.toFixed(2)}`,
-    weapon
-      ? `Fire: ${(weapon.baseFireRate * stats.fireRateMul).toFixed(2)}/s`
-      : "Fire: -",
-    weapon
-      ? `Range: ${(weapon.baseRange * stats.rangeMul).toFixed(0)}`
-      : "Range: -",
-    `Move: ${(stats.moveMul * 100).toFixed(0)}%`,
     `Dmg: ${(stats.damageMul * 100).toFixed(0)}%`,
+    `Fire: ${weapon ? (weapon.baseFireRate * stats.fireRateMul).toFixed(2) + "/s" : "-"}`,
+    `Range: ${weapon ? (weapon.baseRange * stats.rangeMul).toFixed(0) : "-"}`,
+    `Move: ${(stats.moveMul * 100).toFixed(0)}%`,
   ];
   y = 10;
   for (const line of right) {
     ctx.fillText(line, world.canvasWidth - 10, y);
     y += 20;
   }
+
+  // строки с последними баффами от боссов
+  ctx.textAlign = "center";
+  ctx.font = "16px system-ui, sans-serif";
+  let bottomY = world.canvasHeight - 40;
+  if (world.lastBossBuffText) {
+    ctx.fillStyle = "#ffb347";
+    ctx.fillText(world.lastBossBuffText, world.canvasWidth / 2, bottomY);
+    bottomY -= 22;
+  }
+  if (world.lastBoosterBuffText) {
+    ctx.fillStyle = "#7bff9f";
+    ctx.fillText(world.lastBoosterBuffText, world.canvasWidth / 2, bottomY);
+  }
+}
+
+function drawWaveText(world, ctx) {
+  if (!world.waveText || world.waveTextTimer <= 0) return;
+
+  const t = world.waveTextTimer / 2.5;
+  const alpha = Math.max(0, Math.min(1, t));
+  ctx.save();
+  ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+  ctx.font = "32px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(world.waveText, world.canvasWidth / 2, world.canvasHeight * 0.18);
+  ctx.restore();
 }
 
 function drawStateOverlay(world, ctx) {
